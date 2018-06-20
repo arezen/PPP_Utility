@@ -1,0 +1,244 @@
+#!/usr/bin/perl 
+
+####################################################################### 
+# 
+# 
+#       Copyright (C) Cygni, LLC., 2005. 
+#       All Rights Reserved. 
+#       This Module contains Proprietary Information of 
+#       Cygni, LLC., and should be treated 
+#       as Confidential. 
+# 
+####################################################################### 
+BEGIN 
+{ 
+# 
+# add the location of imagereview.pm to the path 
+# 
+$ddir = "<MOD>";  # deployment directory 
+push(@INC,$ddir); 
+} 
+
+use DBI; 
+use Time::Local; 
+use Time::localtime; 
+#use naiad; 
+
+END
+{
+my $stat = $?;
+
+system("rm -f /tmp/ppp_$$*");
+$? = $stat;
+}
+
+sub initialize_globals 
+{ 
+
+
+$usage =<<endUsage;
+Usage $0  <text files>  <projconf_file>
+
+Description:
+    This program will replace <vars> with their values defined in either a 
+    local (~/work/.../PROJCONF) or global (~/.projconf) file.  If both a global
+    and local file exist, the local file will be used and a warning will be
+    issued.
+
+Sample
+    $0 test1 test2
+endUsage
+
+#( $outfile, $StartDate, $EndDate, $db_num ) = split(/~/, $ARGV[0] );
+
+
+
+
+
+
+
+
+
+
+$cwd = `pwd`;
+chomp($cwd);
+if ($cwd =~ /\/work\//)
+    {
+    ($projconf_file = glob $ENV{'PWD'}) =~ s|^(.*work/[^/]*).*|\1/PROJCONF|;
+    if ( ! -e "$projconf_file" )
+        {
+        $projconf_file = glob "~/.projconf";
+        if ( ! -e "$projconf_file" ) 
+            { 
+            die "Couldn't find a ~/work/.../PROJCONF or ~/.projconf file.\n"; 
+  	    }
+        }
+    else
+        {
+        if ( -e glob "~/.projconf" ) 
+            {
+	    print "** WARNING **\7\n** WARNING ** Both a local ~/work/.../PROJCONF and global ~/.projconf file exist.  I'm using the local one!\n** WARNING **\n";
+	    }
+        }
+
+    }
+else
+    {
+    $projconf_file = "~/.projconf";
+    } 
+
+
+if ($#ARGV > 0)
+    {
+    $tfile = $ARGV[1];
+    if (-e $tfile)
+        {
+        $projconf_file = $tfile;
+        }
+    }
+
+@tmp  = ();
+push(@tmp, shift(@ARGV));
+@ARGV = @tmp;
+
+
+
+$which = $projconf_file;
+
+system("rm -f /tmp/ppp_$$.0 ; cp $projconf_file /tmp/ppp_$$.0 ; cp $projconf_file /tmp/ppp_$$.1");
+$projconf_file = "/tmp/ppp_$$.0";
+while ( 1 )
+    {
+    %cfg = get_projconf();
+    process_files($projconf_file);
+    
+    if ( system("cmp -s /tmp/ppp_$$.0 /tmp/ppp_$$.1") == 0 )
+	{
+        last;
+	}
+    system("cp $projconf_file /tmp/ppp_$$.1");
+    }
+
+if ($#ARGV < 0)
+    {
+    print "=" x (length($which)+5);
+    print "\n= $which: =\n";
+    print "=" x (length($which)+5);
+    print "\n\n";
+    foreach $ind (sort keys %cfg)
+        {
+        printf "%-30s = %s\n", "<$ind>", "$cfg{$ind}";
+        }
+    print "\n";
+    print "=" x 80;
+    print "\n\n$usage\n";
+    exit(0);
+}
+
+
+#foreach $ind (sort keys %cfg)
+#    {
+#    print "$ind $cfg{$ind}\n";
+#    }
+
+} 
+
+
+#######################################################################
+#
+# This function will trim leading and trailing spaces
+#
+#######################################################################
+sub trim_spaces
+{
+    my $inp = @_[0];
+
+$inp =~ s/[ \t]*$//g;
+$inp =~ s/^[ \t]*//g;
+return $inp;
+}
+
+
+
+sub get_projconf
+{
+    my @inp;
+    my $ind;
+    my %retval = ();
+    my @flds;
+
+@inp = `cat $projconf_file| grep \"\\|\"`;
+chomp(@inp);
+
+foreach $ind (@inp)
+    {
+    #print "$ind\n";
+
+    @flds = split(/\|/, $ind);
+    $flds[0] = trim_spaces($flds[0]);
+    if (length($flds[0]) > 0)
+        {
+        $retval{$flds[0]} = $flds[1];
+        }
+    }
+
+if (!exists $retval{HOME})
+    {
+    $retval{HOME}    = $ENV{HOME};
+    }
+
+if (!exists $retval{PROJECT})
+    {
+    $retval{PROJECT} = $ENV{PROJECT};
+    }
+
+return %retval;
+}
+
+
+
+sub process_files
+{
+    my @files = @_;
+    my $ind;
+    my $inp;
+    my $jnd;
+    my $str;
+
+foreach $ind (@files)
+    {
+    if (-e $ind)
+        {
+	if ( $ind ne $projconf_file )
+	    {
+	    print "$ind\n";
+	    }
+        $inp = `cat $ind`;
+        foreach $jnd (keys %cfg)
+            {
+            $str = "<$jnd>";
+            $inp =~ s/$str/$cfg{$jnd}/g;
+            }
+
+       open FDESC, "> $ind" or die "can't open $ind: $!";
+       print FDESC $inp;
+       close FDESC;
+        }
+    else
+        {
+        die("$ind does not exist\n");
+        } 
+    }
+
+}
+
+
+####################################################################### 
+# 
+# Main 
+# 
+####################################################################### 
+
+initialize_globals(); 
+
+process_files(@ARGV);
